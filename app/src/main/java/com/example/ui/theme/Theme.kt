@@ -11,33 +11,33 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
-private val ProfessionalPolishColorScheme =
+private val EmeraldMockupColorScheme =
   lightColorScheme(
-    primary = PolishBluePrimary,
+    primary = EmeraldPrimary,
     onPrimary = Color.White,
-    primaryContainer = PolishBlueContainer,
-    onPrimaryContainer = PolishBlueOnContainer,
-    secondary = PolishPurplePrimary,
+    primaryContainer = EmeraldLight,
+    onPrimaryContainer = EmeraldDark,
+    secondary = EmeraldDark,
     onSecondary = Color.White,
-    secondaryContainer = PolishPurpleContainer,
-    onSecondaryContainer = PolishPurplePrimary,
-    tertiary = PolishSuccess,
+    secondaryContainer = EmeraldMintBg,
+    onSecondaryContainer = EmeraldDark,
+    tertiary = TagPurpleText,
     onTertiary = Color.White,
-    tertiaryContainer = PolishSuccessContainer,
-    onTertiaryContainer = PolishSuccess,
-    background = PolishBackground,
-    onBackground = PolishTextPrimary,
-    surface = PolishSurface,
-    onSurface = PolishTextPrimary,
-    surfaceVariant = PolishSurfaceVariant,
-    onSurfaceVariant = PolishTextSecondary,
-    outline = PolishBorder,
-    outlineVariant = PolishBorder,
+    tertiaryContainer = TagPurpleBg,
+    onTertiaryContainer = TagPurpleText,
+    background = MockupBackground,
+    onBackground = TextPrimaryDark,
+    surface = MockupSurface,
+    onSurface = TextPrimaryDark,
+    surfaceVariant = EmeraldMintBg,
+    onSurfaceVariant = TextSecondaryGrey,
+    outline = MockupCardBorder,
+    outlineVariant = MockupBorderSubtle,
   )
 
 @Composable
 fun MyApplicationTheme(
-  darkTheme: Boolean = false, // "Professional Polish" default theme
+  darkTheme: Boolean = false,
   dynamicColor: Boolean = false,
   content: @Composable () -> Unit,
 ) {
@@ -47,8 +47,7 @@ fun MyApplicationTheme(
         val context = LocalContext.current
         if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
       }
-      darkTheme -> ProfessionalPolishColorScheme
-      else -> ProfessionalPolishColorScheme
+      else -> EmeraldMockupColorScheme
     }
 
   MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)

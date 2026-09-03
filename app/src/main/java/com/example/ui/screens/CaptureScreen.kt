@@ -2,10 +2,12 @@ package com.example.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -32,29 +34,26 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -65,30 +64,26 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.example.ui.theme.PolishBackground
-import com.example.ui.theme.PolishBlueContainer
-import com.example.ui.theme.PolishBlueOnContainer
-import com.example.ui.theme.PolishBluePrimary
-import com.example.ui.theme.PolishBorder
-import com.example.ui.theme.PolishPending
-import com.example.ui.theme.PolishPendingContainer
-import com.example.ui.theme.PolishPurpleContainer
-import com.example.ui.theme.PolishPurplePill
-import com.example.ui.theme.PolishPurplePrimary
-import com.example.ui.theme.PolishRecordRed
-import com.example.ui.theme.PolishRecordRedContainer
-import com.example.ui.theme.PolishSuccess
-import com.example.ui.theme.PolishSuccessContainer
-import com.example.ui.theme.PolishSurface
-import com.example.ui.theme.PolishSurfaceVariant
-import com.example.ui.theme.PolishTextMuted
-import com.example.ui.theme.PolishTextPrimary
-import com.example.ui.theme.PolishTextSecondary
+import com.example.ui.components.getTagColors
+import com.example.ui.theme.EmeraldBorder
+import com.example.ui.theme.EmeraldDark
+import com.example.ui.theme.EmeraldGlow
+import com.example.ui.theme.EmeraldLight
+import com.example.ui.theme.EmeraldMintBg
+import com.example.ui.theme.EmeraldPrimary
+import com.example.ui.theme.EmeraldText
+import com.example.ui.theme.MockupBackground
+import com.example.ui.theme.MockupCardBorder
+import com.example.ui.theme.MockupSurface
+import com.example.ui.theme.TextMutedGrey
+import com.example.ui.theme.TextPrimaryDark
+import com.example.ui.theme.TextSecondaryGrey
 import java.util.Locale
 
 @Composable
@@ -106,12 +101,10 @@ fun CaptureScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: Voice, 1: Text, 2: Video
+    var isPaused by remember { mutableStateOf(false) }
 
-    // Text inputs
-    var titleInput by remember { mutableStateOf("") }
-    var textContentInput by remember { mutableStateOf("") }
-    var selectedTags by remember { mutableStateOf(setOf("agent", "idea")) }
+    // Selected tags
+    var selectedTags by remember { mutableStateOf(listOf("agent", "bug", "todo")) }
 
     // Audio Permission Launcher
     var hasAudioPermission by remember {
@@ -126,680 +119,535 @@ fun CaptureScreen(
         hasAudioPermission = isGranted
         if (isGranted) {
             onStartRecording()
+        } else {
+            Toast.makeText(context, "Microphone permission required for voice notes", Toast.LENGTH_SHORT).show()
         }
     }
 
-    val availableTags = listOf("agent", "idea", "todo", "bug", "claude", "architecture")
+    // Auto-start recording when entering this screen if not already recording
+    LaunchedEffect(Unit) {
+        if (!isRecording && !isSaving) {
+            if (hasAudioPermission) {
+                onStartRecording()
+            } else {
+                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        }
+    }
+
+    // Pulse animation for recording red dot
+    val transition = rememberInfiniteTransition(label = "pulse")
+    val dotAlpha by transition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dotAlpha"
+    )
+
+    // Cursor blink animation
+    val cursorVisible by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(500, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "cursorBlink"
+    )
+
+    // Timer formatted: 00:00:18
+    val formattedTimer = remember(elapsedSeconds) {
+        val hours = elapsedSeconds / 3600
+        val mins = (elapsedSeconds % 3600) / 60
+        val secs = elapsedSeconds % 60
+        String.format(Locale.US, "%02d:%02d:%02d", hours, mins, secs)
+    }
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(PolishBackground)
+            .background(MockupBackground)
             .verticalScroll(rememberScrollState())
     ) {
-        // Top Bar
-        Surface(
-            color = PolishSurfaceVariant,
+        // 1. Top Bar: Back Arrow, Centered "Voice Recording", Settings Gear
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = TextPrimaryDark,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Text(
+                text = "Voice Recording",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimaryDark
+            )
+
+            IconButton(onClick = { Toast.makeText(context, "Voice Recording Settings", Toast.LENGTH_SHORT).show() }) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Settings",
+                    tint = TextPrimaryDark,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 2. Status Indicator: Centered Red Dot + "Recording"
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxWidth()
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFEF4444).copy(alpha = if (isRecording && !isPaused) dotAlpha else 1f))
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = if (isPaused) "Paused" else "Recording",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = TextSecondaryGrey
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // 3. Digital Timer (00:00:18)
+        Text(
+            text = formattedTimer,
+            fontSize = 42.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimaryDark,
+            fontFamily = FontFamily.Default,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // 4. Dynamic Audio Waveform Visualizer (Green bars)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp)
+                .padding(horizontal = 24.dp),
+            contentAlignment = Alignment.Center
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 12.dp)
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = PolishTextPrimary
-                    )
-                }
-                Spacer(modifier = Modifier.width(4.dp))
-                Column {
-                    Text(
-                        text = "Instant Note Capture",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = PolishTextPrimary
-                    )
-                    Text(
-                        text = "Syncs immediately to local agents & MCP",
-                        fontSize = 12.sp,
-                        color = PolishBluePrimary
-                    )
-                }
-            }
-        }
-
-        // Mode Switcher Tabs
-        TabRow(
-            selectedTabIndex = selectedTab,
-            containerColor = PolishSurfaceVariant,
-            contentColor = PolishBluePrimary,
-            indicator = { tabPositions ->
-                TabRowDefaults.SecondaryIndicator(
-                    Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                    color = PolishBluePrimary,
-                    height = 3.dp
-                )
-            }
-        ) {
-            Tab(
-                selected = selectedTab == 0,
-                onClick = { selectedTab = 0 },
-                text = {
-                    Text(
-                        "🎙️ Voice",
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (selectedTab == 0) PolishBluePrimary else PolishTextSecondary
-                    )
-                }
-            )
-            Tab(
-                selected = selectedTab == 1,
-                onClick = { selectedTab = 1 },
-                text = {
-                    Text(
-                        "✍️ Text",
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (selectedTab == 1) PolishBluePrimary else PolishTextSecondary
-                    )
-                }
-            )
-            Tab(
-                selected = selectedTab == 2,
-                onClick = { selectedTab = 2 },
-                text = {
-                    Text(
-                        "🎥 Video",
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (selectedTab == 2) PolishBluePrimary else PolishTextSecondary
-                    )
-                }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Tab Contents
-        when (selectedTab) {
-            0 -> {
-                // VOICE CAPTURE (Prioritized & Frictionless)
-                VoiceCaptureContent(
-                    isRecording = isRecording,
-                    amplitude = amplitude,
-                    elapsedSeconds = elapsedSeconds,
-                    liveTranscript = liveTranscript,
-                    isSaving = isSaving,
-                    titleInput = titleInput,
-                    onTitleChange = { titleInput = it },
-                    selectedTags = selectedTags,
-                    onToggleTag = { tag ->
-                        selectedTags = if (selectedTags.contains(tag)) selectedTags - tag else selectedTags + tag
-                    },
-                    availableTags = availableTags,
-                    onMicClick = {
-                        if (isRecording) {
-                            onStopRecordingAndSave(
-                                titleInput.ifBlank { null },
-                                selectedTags.joinToString(",")
-                            )
-                        } else {
-                            if (hasAudioPermission) {
-                                onStartRecording()
-                            } else {
-                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                            }
-                        }
-                    },
-                    onCancel = onCancelRecording
-                )
-            }
-
-            1 -> {
-                // TEXT CAPTURE
-                TextCaptureContent(
-                    title = titleInput,
-                    onTitleChange = { titleInput = it },
-                    content = textContentInput,
-                    onContentChange = { textContentInput = it },
-                    selectedTags = selectedTags,
-                    availableTags = availableTags,
-                    isSaving = isSaving,
-                    onToggleTag = { tag ->
-                        selectedTags = if (selectedTags.contains(tag)) selectedTags - tag else selectedTags + tag
-                    },
-                    onSave = {
-                        if (textContentInput.isNotBlank()) {
-                            onSaveTextNote(
-                                titleInput.trim(),
-                                textContentInput.trim(),
-                                selectedTags.joinToString(",")
-                            )
-                        }
+                val totalBars = 32
+                for (i in 0 until totalBars) {
+                    val multiplier = when {
+                        i in 10..22 -> 1.0f - (kotlin.math.abs(i - 16) * 0.08f)
+                        else -> 0.35f
                     }
-                )
-            }
-
-            2 -> {
-                // VIDEO MEMO
-                VideoMemoContent(
-                    onSaveAsNote = { memo ->
-                        onSaveTextNote(
-                            "Video Memo Note",
-                            memo,
-                            "video,agent"
-                        )
+                    val baseHeight = if (isRecording && !isPaused) {
+                        (8 + amplitude * 48 * multiplier + (i % 5) * 4).coerceIn(6f, 56f)
+                    } else {
+                        8f
                     }
-                )
+
+                    Box(
+                        modifier = Modifier
+                            .width(3.dp)
+                            .height(baseHeight.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(EmeraldPrimary)
+                    )
+                }
             }
         }
-    }
-}
-
-@Composable
-fun VoiceCaptureContent(
-    isRecording: Boolean,
-    amplitude: Float,
-    elapsedSeconds: Int,
-    liveTranscript: String,
-    isSaving: Boolean,
-    titleInput: String,
-    onTitleChange: (String) -> Unit,
-    selectedTags: Set<String>,
-    onToggleTag: (String) -> Unit,
-    availableTags: List<String>,
-    onMicClick: () -> Unit,
-    onCancel: () -> Unit
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = if (isRecording) 1.22f else 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseScale"
-    )
-
-    fun formatSeconds(sec: Int): String {
-        val m = sec / 60
-        val s = sec % 60
-        return String.format(Locale.getDefault(), "%02d:%02d", m, s)
-    }
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(20.dp)
-    ) {
-        // Status prompt
-        Text(
-            text = if (isRecording) "Recording Voice Note..." else "Tap to Record Voice Note",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = if (isRecording) PolishRecordRed else PolishTextPrimary
-        )
-
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = if (isRecording) "Speak clearly. Real-time transcript is active." else "Zero friction: single tap to speak, single tap to sync to agent.",
-            fontSize = 13.sp,
-            color = PolishTextSecondary,
-            textAlign = TextAlign.Center
-        )
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        // Main Mic Button with Professional Polish circular container
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.size(170.dp)
-        ) {
-            if (isRecording) {
-                // Pulse aura
-                Box(
-                    modifier = Modifier
-                        .size(150.dp)
-                        .scale(pulseScale)
-                        .background(PolishRecordRedContainer.copy(alpha = 0.6f), CircleShape)
-                )
-            } else {
-                // Outer subtle container ring
-                Box(
-                    modifier = Modifier
-                        .size(136.dp)
-                        .background(PolishBlueContainer, CircleShape)
-                        .border(4.dp, Color.White, CircleShape)
-                )
-            }
-
-            // Central Button
-            Box(
-                modifier = Modifier
-                    .size(100.dp)
-                    .clip(CircleShape)
-                    .background(if (isRecording) PolishRecordRed else PolishBluePrimary)
-                    .clickable { onMicClick() }
-                    .testTag("record_mic_button"),
-                contentAlignment = Alignment.Center
-            ) {
-                if (isSaving) {
-                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(36.dp))
-                } else {
-                    Icon(
-                        imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                        contentDescription = if (isRecording) "Stop Recording" else "Start Recording",
-                        tint = Color.White,
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
-            }
-        }
-
-        // Live Timer
-        Text(
-            text = formatSeconds(elapsedSeconds),
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (isRecording) PolishRecordRed else PolishTextMuted
-        )
-
-        // Waveform Visualizer
-        Spacer(modifier = Modifier.height(16.dp))
-        LiveWaveformVisualizer(
-            isRecording = isRecording,
-            amplitude = amplitude,
+        // 5. Live Transcript Card
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MockupSurface),
+            border = BorderStroke(1.dp, EmeraldBorder),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(44.dp)
-        )
-
-        // Live Transcript Preview Box
-        Spacer(modifier = Modifier.height(20.dp))
-        Surface(
-            color = PolishSurface,
-            shape = RoundedCornerShape(18.dp),
-            border = BorderStroke(1.dp, PolishBorder),
-            shadowElevation = 1.dp,
-            modifier = Modifier.fillMaxWidth()
+                .padding(horizontal = 20.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                // Header row: Sparkle + "Live transcript" | Language dropdown
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth()
                 ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = EmeraldDark,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Live transcript",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = EmeraldDark
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { Toast.makeText(context, "Select Language", Toast.LENGTH_SHORT).show() }
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "English (US)",
+                            fontSize = 13.sp,
+                            color = TextSecondaryGrey,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = TextSecondaryGrey,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Transcript content with animated blinking cursor
+                val transcriptDisplay = if (liveTranscript.isNotBlank()) {
+                    liveTranscript
+                } else {
+                    "We need to refactor the authentication module and fix the token refresh logic. Also update the onboarding copy for better clarity..."
+                }
+
+                Row(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "LIVE SPEECH TRANSCRIPT",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = PolishBluePrimary,
-                        letterSpacing = 1.sp
+                        text = transcriptDisplay,
+                        fontSize = 14.sp,
+                        color = TextPrimaryDark,
+                        lineHeight = 22.sp,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
-                    if (isRecording) {
+                    if (isRecording && cursorVisible > 0.5f) {
+                        Box(
+                            modifier = Modifier
+                                .width(2.dp)
+                                .height(16.dp)
+                                .background(EmeraldDark)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Tags Row inside card
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    selectedTags.forEach { tag ->
+                        val (pillBg, pillText) = getTagColors(tag)
                         Surface(
-                            color = PolishRecordRedContainer,
-                            shape = RoundedCornerShape(10.dp)
+                            color = pillBg,
+                            shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
-                                text = "LISTENING",
-                                color = PolishRecordRed,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                text = "#$tag",
+                                color = pillText,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    // + Add tag button
+                    Surface(
+                        color = MockupSurface,
+                        border = BorderStroke(1.dp, MockupCardBorder),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { Toast.makeText(context, "Add custom tag", Toast.LENGTH_SHORT).show() }
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = null,
+                                tint = TextSecondaryGrey,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Add tag",
+                                fontSize = 12.sp,
+                                color = TextSecondaryGrey,
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = if (liveTranscript.isNotBlank()) liveTranscript else if (isRecording) "Listening to your voice..." else "Your speech transcript will automatically appear here.",
-                    fontSize = 14.sp,
-                    color = if (liveTranscript.isNotBlank()) PolishTextPrimary else PolishTextMuted,
-                    lineHeight = 22.sp
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(18.dp))
-
-        // Optional Title and Tag Customization
-        OutlinedTextField(
-            value = titleInput,
-            onValueChange = onTitleChange,
-            placeholder = { Text("Note Title (Optional - auto-generated if empty)", color = PolishTextMuted, fontSize = 13.sp) },
-            singleLine = true,
-            shape = RoundedCornerShape(14.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = PolishSurface,
-                unfocusedContainerColor = PolishSurface,
-                focusedBorderColor = PolishBluePrimary,
-                unfocusedBorderColor = PolishBorder,
-                focusedTextColor = PolishTextPrimary,
-                unfocusedTextColor = PolishTextPrimary
-            ),
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Quick Tag chips
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            for (tag in availableTags.take(4)) {
-                val isSelected = selectedTags.contains(tag)
-                Surface(
-                    color = if (isSelected) PolishPurplePill else PolishSurface,
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, if (isSelected) PolishPurplePrimary else PolishBorder),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onToggleTag(tag) }
-                ) {
-                    Text(
-                        text = "#$tag",
-                        color = if (isSelected) PolishPurplePrimary else PolishTextSecondary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
-                }
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Action Buttons if recording
-        if (isRecording) {
+        // 6. Sound Level Meter Card
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+        ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Button(
-                    onClick = onCancel,
-                    colors = ButtonDefaults.buttonColors(containerColor = PolishSurfaceVariant),
-                    border = BorderStroke(1.dp, PolishBorder),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.Close, contentDescription = null, tint = PolishTextSecondary)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Mic,
+                        contentDescription = null,
+                        tint = EmeraldDark,
+                        modifier = Modifier.size(18.dp)
+                    )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Discard", color = PolishTextSecondary)
+                    Text(
+                        text = "Sound level",
+                        fontSize = 13.sp,
+                        color = TextSecondaryGrey,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
 
-                Button(
-                    onClick = onMicClick,
-                    colors = ButtonDefaults.buttonColors(containerColor = PolishBluePrimary),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.Check, contentDescription = null, tint = Color.White)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Save & Sync", color = Color.White, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Good",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = EmeraldDark
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(EmeraldPrimary)
+                    )
                 }
             }
-        }
-    }
-}
 
-@Composable
-fun LiveWaveformVisualizer(
-    isRecording: Boolean,
-    amplitude: Float,
-    modifier: Modifier = Modifier
-) {
-    val barCount = 28
-    Row(
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
-    ) {
-        for (i in 0 until barCount) {
-            val factor = ((i % 7) + 1) / 7f
-            val baseHeight = if (isRecording) (12 + amplitude * 32 * factor).coerceIn(4f, 40f) else 4f
-            val barColor = if (isRecording) {
-                if (i % 2 == 0) PolishBluePrimary else PolishPurplePrimary
-            } else PolishBorder
+            Spacer(modifier = Modifier.height(10.dp))
 
-            Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .height(baseHeight.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(barColor)
-            )
-        }
-    }
-}
+            // Dot Matrix Meter
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                val totalDots = 28
+                val filledDots = if (isRecording && !isPaused) ((amplitude * 35).toInt() + 14).coerceIn(4, totalDots) else 8
 
-@Composable
-fun TextCaptureContent(
-    title: String,
-    onTitleChange: (String) -> Unit,
-    content: String,
-    onContentChange: (String) -> Unit,
-    selectedTags: Set<String>,
-    availableTags: List<String>,
-    isSaving: Boolean,
-    onToggleTag: (String) -> Unit,
-    onSave: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(20.dp)
-    ) {
-        Text(
-            text = "Type Note for Local Agent",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = PolishTextPrimary
-        )
-        Text(
-            text = "Notes are saved to the shared database and exposed to Claude Code / Antigravity via MCP.",
-            fontSize = 13.sp,
-            color = PolishTextSecondary
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = title,
-            onValueChange = onTitleChange,
-            placeholder = { Text("Note Title (e.g. Optimize SQL query in Agent)", color = PolishTextMuted) },
-            singleLine = true,
-            shape = RoundedCornerShape(14.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = PolishSurface,
-                unfocusedContainerColor = PolishSurface,
-                focusedBorderColor = PolishBluePrimary,
-                unfocusedBorderColor = PolishBorder,
-                focusedTextColor = PolishTextPrimary,
-                unfocusedTextColor = PolishTextPrimary
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("text_note_title")
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = content,
-            onValueChange = onContentChange,
-            placeholder = { Text("Write your thoughts, task requirements, or agent instructions here...", color = PolishTextMuted) },
-            minLines = 6,
-            shape = RoundedCornerShape(14.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = PolishSurface,
-                unfocusedContainerColor = PolishSurface,
-                focusedBorderColor = PolishBluePrimary,
-                unfocusedBorderColor = PolishBorder,
-                focusedTextColor = PolishTextPrimary,
-                unfocusedTextColor = PolishTextPrimary
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("text_note_content")
-        )
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // Tags
-        Text("Tags:", fontSize = 12.sp, color = PolishTextMuted, fontWeight = FontWeight.SemiBold)
-        Spacer(modifier = Modifier.height(6.dp))
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            for (tag in availableTags) {
-                val isSelected = selectedTags.contains(tag)
-                Surface(
-                    color = if (isSelected) PolishPurplePill else PolishSurface,
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, if (isSelected) PolishPurplePrimary else PolishBorder),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onToggleTag(tag) }
-                ) {
-                    Text(
-                        text = "#$tag",
-                        color = if (isSelected) PolishPurplePrimary else PolishTextSecondary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                for (i in 0 until totalDots) {
+                    val isFilled = i < filledDots
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(if (isFilled) EmeraldPrimary else Color(0xFFE5E7EB))
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(36.dp))
 
-        Button(
-            onClick = onSave,
-            enabled = content.isNotBlank() && !isSaving,
-            colors = ButtonDefaults.buttonColors(containerColor = PolishBluePrimary),
-            shape = RoundedCornerShape(14.dp),
+        // 7. Recording Controls: 3 Circular Buttons (Pause, Stop, Save)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp)
-                .testTag("save_text_note_button")
+                .padding(horizontal = 20.dp)
         ) {
-            if (isSaving) {
-                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-            } else {
-                Icon(Icons.Default.Send, contentDescription = null, tint = Color.White)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Save Note to Shared Database", fontWeight = FontWeight.Bold, color = Color.White)
-            }
-        }
-    }
-}
-
-@Composable
-fun VideoMemoContent(
-    onSaveAsNote: (String) -> Unit
-) {
-    var memoText by remember { mutableStateOf("") }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(20.dp)
-    ) {
-        Text(
-            text = "Video & Multimodal Note",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = PolishTextPrimary
-        )
-        Text(
-            text = "Record quick video memos or attach visual bug summaries for your local agents.",
-            fontSize = 13.sp,
-            color = PolishTextSecondary
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Surface(
-            color = PolishSurface,
-            shape = RoundedCornerShape(18.dp),
-            border = BorderStroke(1.dp, PolishBorder),
-            shadowElevation = 1.dp,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(24.dp)
-            ) {
+            // Left: Pause Button
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
                     modifier = Modifier
                         .size(64.dp)
-                        .background(PolishPurpleContainer, CircleShape),
+                        .clip(CircleShape)
+                        .background(MockupSurface)
+                        .border(1.dp, MockupCardBorder, CircleShape)
+                        .clickable { isPaused = !isPaused },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Videocam,
-                        contentDescription = "Video",
-                        tint = PolishPurplePrimary,
-                        modifier = Modifier.size(32.dp)
+                        imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                        contentDescription = "Pause",
+                        tint = TextPrimaryDark,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("Video Note Capture", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PolishTextPrimary)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = if (isPaused) "Resume" else "Pause",
+                    fontSize = 13.sp,
+                    color = TextSecondaryGrey,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            // Center: Large Green Stop Button
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.size(96.dp)
+                ) {
+                    // Outer Soft Halo Ring
+                    Box(
+                        modifier = Modifier
+                            .size(92.dp)
+                            .clip(CircleShape)
+                            .background(EmeraldGlow)
+                    )
+
+                    // Inner Emerald Button
+                    Box(
+                        modifier = Modifier
+                            .size(74.dp)
+                            .clip(CircleShape)
+                            .background(EmeraldPrimary)
+                            .clickable {
+                                onStopRecordingAndSave(null, selectedTags.joinToString(","))
+                            }
+                            .testTag("stop_recording_button"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isSaving) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                strokeWidth = 3.dp,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        } else {
+                            // Rounded Square Stop icon
+                            Box(
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color.White)
+                            )
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    "You can capture a video memo and add notes that local agents can analyze.",
+                    text = "Stop",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = EmeraldDark
+                )
+            }
+
+            // Right: Save Button
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(MockupSurface)
+                        .border(1.dp, MockupCardBorder, CircleShape)
+                        .clickable {
+                            onStopRecordingAndSave(null, selectedTags.joinToString(","))
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Save",
+                        tint = TextPrimaryDark,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Save",
                     fontSize = 13.sp,
-                    color = PolishTextSecondary,
-                    textAlign = TextAlign.Center
+                    color = TextSecondaryGrey,
+                    fontWeight = FontWeight.Medium
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
-        OutlinedTextField(
-            value = memoText,
-            onValueChange = { memoText = it },
-            placeholder = { Text("Describe the video note or attach context...", color = PolishTextMuted) },
-            minLines = 3,
-            shape = RoundedCornerShape(14.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = PolishSurface,
-                unfocusedContainerColor = PolishSurface,
-                focusedBorderColor = PolishBluePrimary,
-                unfocusedBorderColor = PolishBorder,
-                focusedTextColor = PolishTextPrimary,
-                unfocusedTextColor = PolishTextPrimary
-            ),
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(
-            onClick = {
-                if (memoText.isNotBlank()) {
-                    onSaveAsNote(memoText)
-                }
-            },
-            enabled = memoText.isNotBlank(),
-            colors = ButtonDefaults.buttonColors(containerColor = PolishBluePrimary, contentColor = Color.White),
-            shape = RoundedCornerShape(14.dp),
+        // 8. Tip Banner at Bottom
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MockupSurface),
+            border = BorderStroke(1.dp, MockupCardBorder),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp)
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
         ) {
-            Icon(Icons.Default.Check, contentDescription = null, tint = Color.White)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Save Video Memo", fontWeight = FontWeight.Bold, color = Color.White)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(EmeraldMintBg),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lightbulb,
+                        contentDescription = null,
+                        tint = EmeraldDark,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                Text(
+                    text = "Tip: Speak clearly for better results",
+                    fontSize = 13.sp,
+                    color = TextSecondaryGrey,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }

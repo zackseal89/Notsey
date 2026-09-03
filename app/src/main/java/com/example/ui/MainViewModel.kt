@@ -28,11 +28,12 @@ import java.io.File
 import java.util.Locale
 
 enum class SurfaceTab {
+    HOME,
     NOTES,
+    AGENTS,
+    ACTIVITY,
     RECORD,
-    TASKS,
-    AGENT_BRIDGE,
-    DATABASE_INSPECTOR
+    NOTE_DETAIL
 }
 
 enum class TypeFilter {
@@ -67,8 +68,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val player = AudioPlayerManager()
     val server = AgentMcpServer(application, repository)
 
-    private val _currentTab = MutableStateFlow(SurfaceTab.NOTES)
+    private val _currentTab = MutableStateFlow(SurfaceTab.HOME)
     val currentTab: StateFlow<SurfaceTab> = _currentTab.asStateFlow()
+
+    private val _selectedNoteId = MutableStateFlow<Long?>(null)
+    val selectedNoteId: StateFlow<Long?> = _selectedNoteId.asStateFlow()
+
+    val selectedNote: StateFlow<NoteEntity?> = combine(
+        repository.allNotes,
+        _selectedNoteId
+    ) { all, id ->
+        all.find { it.id == id }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -146,76 +157,124 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun seedSampleDataIfEmpty() {
         viewModelScope.launch {
-            val count = repository.getAllNotesSync().size
-            if (count == 0) {
-                // Seed Note 1: Task
+            val existing = repository.getAllNotesSync()
+            val hasMockupNote = existing.any { it.title.contains("Google login", ignoreCase = true) }
+            if (!hasMockupNote) {
+                // If there are legacy notes but not the mockup notes, clear and seed mockup data
+                if (existing.isNotEmpty()) {
+                    for (n in existing) {
+                        repository.deleteNoteById(n.id)
+                    }
+                }
+
+                // 1. Mockup Note 1: Fix Google login flow (Voice Note)
                 val n1 = NoteEntity(
-                    title = "Implement OAuth token caching",
-                    content = "When user authenticates, cache the JWT token securely so Codex and Claude Code can reuse it without re-prompting every turn.",
-                    transcript = "When user authenticates, cache the JWT token securely so Codex and Claude Code can reuse it without re-prompting every turn.",
-                    summary = "Cache JWT credentials locally in Room to avoid repetitive user authentication prompts.",
-                    classification = "TASK",
-                    type = "VOICE",
-                    tags = "security,auth,agent",
-                    agentStatus = "PENDING"
-                )
-                val id1 = repository.insertNote(n1)
-                repository.insertTag(TagEntity(noteId = id1, tag = "auth"))
-                repository.insertTag(TagEntity(noteId = id1, tag = "security"))
-                repository.insertTask(TaskEntity(noteId = id1, title = "Define Room entity for token storage", priority = "HIGH"))
-                repository.insertTask(TaskEntity(noteId = id1, title = "Add encryption cipher for SharedPreferences/Room", priority = "MEDIUM"))
-                val emb1 = GeminiAiService.generateLocalDeterministicEmbedding("${n1.title} ${n1.content}")
-                repository.insertEmbedding(EmbeddingEntity(noteId = id1, embeddingJson = JSONArray(emb1.toList()).toString()))
-                repository.recordActivityEvent("NOTE_CREATED", id1, "Seeded note #$id1 (TASK)")
-
-                // Seed Note 2: Idea
-                val n2 = NoteEntity(
-                    title = "MCP server bi-directional sync",
-                    content = "Expose structured MCP tools to Claude Code, Codex, Cursor, and Antigravity for real-time mobile note collaboration.",
-                    transcript = null,
-                    summary = "Local SQLite Room database exposes MCP JSON-RPC protocol over port 8080 for coding assistants.",
-                    classification = "IDEA",
-                    type = "TEXT",
-                    tags = "mcp,database,claude,antigravity",
-                    agentStatus = "PROCESSED",
-                    agentName = "Claude Code",
-                    agentSummary = "Analyzed schema and verified 9 core tables with MCP JSON-RPC v2.0 protocol."
-                )
-                val id2 = repository.insertNote(n2)
-                repository.insertTag(TagEntity(noteId = id2, tag = "mcp"))
-                repository.insertTag(TagEntity(noteId = id2, tag = "database"))
-                repository.insertTask(TaskEntity(noteId = id2, title = "Expose /mcp endpoint", isCompleted = true, priority = "HIGH"))
-                val emb2 = GeminiAiService.generateLocalDeterministicEmbedding("${n2.title} ${n2.content}")
-                repository.insertEmbedding(EmbeddingEntity(noteId = id2, embeddingJson = JSONArray(emb2.toList()).toString()))
-                repository.recordActivityEvent("NOTE_CREATED", id2, "Seeded note #$id2 (IDEA)")
-
-                // Seed Note 3: Bug
-                val n3 = NoteEntity(
-                    title = "Fix audio streaming buffer stall",
-                    content = "Audio playback pauses for 500ms on network drop. Need chunked transfer encoding on /api/notes/{id}/audio.",
-                    transcript = "Audio playback pauses for 500ms on network drop. Need chunked transfer encoding on /api/notes/{id}/audio.",
-                    summary = "Prevent buffer under-runs by providing 8KB chunked streaming in HTTP response header.",
+                    title = "Fix Google login flow",
+                    content = "Users try to login with Google, the app crashes on callback on Android 14. Need to check the intent handling and update the dependencies.",
+                    transcript = "When users try to login with Google, the app crashes on callback on Android 14. Need to check the intent handling and update the dependencies.",
+                    summary = "Google login crashes on Android 14 during OAuth callback. Likely an intent handling or dependency compatibility issue.",
                     classification = "BUG",
                     type = "VOICE",
-                    tags = "audio,streaming,bug",
-                    agentStatus = "PENDING"
+                    audioPath = "/mock/audio/google_login_flow.m4a",
+                    audioDurationMs = 46000L,
+                    tags = "agent,bug,android",
+                    agentStatus = "PENDING",
+                    createdAt = System.currentTimeMillis() - 1000L * 60 * 25 // 25 mins ago (9:32 AM)
+                )
+                val id1 = repository.insertNote(n1)
+                repository.insertTag(TagEntity(noteId = id1, tag = "agent"))
+                repository.insertTag(TagEntity(noteId = id1, tag = "bug"))
+                repository.insertTag(TagEntity(noteId = id1, tag = "android"))
+                repository.insertTask(TaskEntity(noteId = id1, title = "Inspect Android 14 intent filter export", priority = "HIGH"))
+                repository.insertTask(TaskEntity(noteId = id1, title = "Update Play Services Auth SDK", priority = "MEDIUM"))
+                val emb1 = GeminiAiService.generateLocalDeterministicEmbedding("${n1.title} ${n1.content}")
+                repository.insertEmbedding(EmbeddingEntity(noteId = id1, embeddingJson = JSONArray(emb1.toList()).toString()))
+                repository.recordActivityEvent("VOICE_TRANSCRIBED", id1, "Transcribed note #$id1: Fix Google login flow")
+
+                // 2. Mockup Note 2: AI code review assistant (Idea Note)
+                val n2 = NoteEntity(
+                    title = "AI code review assistant",
+                    content = "Building an AI agent that reviews PRs and suggests improvements across Kotlin and compose architecture.",
+                    transcript = null,
+                    summary = "Building an AI agent that reviews PRs and suggests improvements...",
+                    classification = "IDEA",
+                    type = "TEXT",
+                    tags = "idea,ai",
+                    agentStatus = "PROCESSED",
+                    agentName = "Claude Code",
+                    agentSummary = "Analyzed repository pull request workflows and configured GitHub Action triggers.",
+                    createdAt = System.currentTimeMillis() - 1000L * 60 * 105 // ~1.5h ago (8:15 AM)
+                )
+                val id2 = repository.insertNote(n2)
+                repository.insertTag(TagEntity(noteId = id2, tag = "idea"))
+                repository.insertTag(TagEntity(noteId = id2, tag = "ai"))
+                repository.insertTask(TaskEntity(noteId = id2, title = "Connect webhook endpoint", isCompleted = true, priority = "HIGH"))
+                val emb2 = GeminiAiService.generateLocalDeterministicEmbedding("${n2.title} ${n2.content}")
+                repository.insertEmbedding(EmbeddingEntity(noteId = id2, embeddingJson = JSONArray(emb2.toList()).toString()))
+                repository.recordActivityEvent("NOTE_CREATED", id2, "Created idea note #$id2")
+
+                // 3. Mockup Note 3: Onboarding copy update (Task Note)
+                val n3 = NoteEntity(
+                    title = "Onboarding copy update",
+                    content = "Update step 2 and 3 microcopy to improve clarity and conversion rate for mobile onboarding.",
+                    transcript = null,
+                    summary = "Update step 2 and 3 microcopy to improve clarity and conversion.",
+                    classification = "TASK",
+                    type = "TEXT",
+                    tags = "todo,product",
+                    agentStatus = "PENDING",
+                    createdAt = System.currentTimeMillis() - 1000L * 60 * 60 * 24 // Yesterday
                 )
                 val id3 = repository.insertNote(n3)
-                repository.insertTag(TagEntity(noteId = id3, tag = "audio"))
-                repository.insertTag(TagEntity(noteId = id3, tag = "bug"))
-                repository.insertTask(TaskEntity(noteId = id3, title = "Adjust socket buffer size to 16KB", priority = "HIGH"))
+                repository.insertTag(TagEntity(noteId = id3, tag = "todo"))
+                repository.insertTag(TagEntity(noteId = id3, tag = "product"))
+                repository.insertTask(TaskEntity(noteId = id3, title = "Draft new microcopy for Step 2", priority = "MEDIUM"))
                 val emb3 = GeminiAiService.generateLocalDeterministicEmbedding("${n3.title} ${n3.content}")
                 repository.insertEmbedding(EmbeddingEntity(noteId = id3, embeddingJson = JSONArray(emb3.toList()).toString()))
-                repository.recordActivityEvent("NOTE_CREATED", id3, "Seeded note #$id3 (BUG)")
+                repository.recordActivityEvent("NOTE_CREATED", id3, "Created task note #$id3")
 
-                // Link relationship between n1 and n2
-                repository.insertRelationship(NoteRelationshipEntity(
-                    sourceNoteId = id1,
-                    targetNoteId = id2,
-                    relationshipType = "RELATED",
-                    confidence = 0.78f,
-                    explanation = "Both involve agent authentication and server bridge integration"
-                ))
+                // 4. Related Note: Implement OAuth state handling
+                val n4 = NoteEntity(
+                    title = "Implement OAuth state handling",
+                    content = "Verify redirect URIs and secure PKCE handshake state on Android 14.",
+                    classification = "IDEA",
+                    type = "TEXT",
+                    tags = "auth,security",
+                    agentStatus = "PROCESSED",
+                    agentName = "Antigravity",
+                    createdAt = System.currentTimeMillis() - 1000L * 60 * 60 * 24 * 4 // May 20
+                )
+                val id4 = repository.insertNote(n4)
+
+                // 5. Related Note: Android 14 intent changes
+                val n5 = NoteEntity(
+                    title = "Android 14 intent changes",
+                    content = "Detailed documentation of intent security policies and exported components.",
+                    classification = "BUG",
+                    type = "TEXT",
+                    tags = "android,security",
+                    agentStatus = "PENDING",
+                    createdAt = System.currentTimeMillis() - 1000L * 60 * 60 * 24 * 6 // May 18
+                )
+                val id5 = repository.insertNote(n5)
+
+                // 6. Related Note: Auth flow improvements
+                val n6 = NoteEntity(
+                    title = "Auth flow improvements",
+                    content = "Voice discussion on simplifying authentication lifecycle and session tokens.",
+                    classification = "TASK",
+                    type = "VOICE",
+                    audioDurationMs = 28000L,
+                    tags = "auth,flow",
+                    agentStatus = "PROCESSED",
+                    createdAt = System.currentTimeMillis() - 1000L * 60 * 60 * 24 * 14 // May 10
+                )
+                val id6 = repository.insertNote(n6)
+
+                // Insert Relationships between n1 and related notes
+                repository.insertRelationship(NoteRelationshipEntity(sourceNoteId = id1, targetNoteId = id4, relationshipType = "RELATED", confidence = 0.88f, explanation = "Both involve OAuth authentication"))
+                repository.insertRelationship(NoteRelationshipEntity(sourceNoteId = id1, targetNoteId = id5, relationshipType = "RELATED", confidence = 0.92f, explanation = "Both involve Android 14 intent changes"))
+                repository.insertRelationship(NoteRelationshipEntity(sourceNoteId = id1, targetNoteId = id6, relationshipType = "RELATED", confidence = 0.82f, explanation = "Both relate to authentication improvements"))
 
                 refreshStats()
             }
@@ -224,9 +283,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setTab(tab: SurfaceTab) {
         _currentTab.value = tab
-        if (tab == SurfaceTab.DATABASE_INSPECTOR) {
+        if (tab != SurfaceTab.NOTE_DETAIL) {
+            _selectedNoteId.value = null
+        }
+        if (tab == SurfaceTab.ACTIVITY) {
             refreshStats()
         }
+    }
+
+    fun openNoteDetail(noteId: Long) {
+        _selectedNoteId.value = noteId
+        _currentTab.value = SurfaceTab.NOTE_DETAIL
+    }
+
+    fun closeNoteDetail() {
+        _selectedNoteId.value = null
+        _currentTab.value = SurfaceTab.HOME
     }
 
     fun setSearchQuery(query: String) {
@@ -258,7 +330,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (result != null) {
                 val audioFile = File(result.filePath)
 
-                // 1. Audio Transcription using gemini-3.5-transcribe / gemini-3.5-flash
                 val transcript = if (result.transcript.isNotBlank()) {
                     result.transcript
                 } else {
@@ -269,11 +340,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val existingNotes = repository.getAllNotesSync().map { Pair(it.id, it.title) }
                 val aiAnalysis = GeminiAiService.analyzeAndClassifyNote(transcript, existingNotes)
 
-                // 2. Determine title and tags
                 val finalTitle = customTitle?.ifBlank { aiAnalysis.title } ?: aiAnalysis.title
                 val finalTags = customTags?.ifBlank { aiAnalysis.tags.joinToString(",") } ?: aiAnalysis.tags.joinToString(",")
 
-                // 3. Insert NoteEntity
                 val note = NoteEntity(
                     title = finalTitle,
                     content = aiAnalysis.summary,
@@ -289,7 +358,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 val noteId = repository.insertNote(note)
 
-                // 4. Insert AudioEntity into 'audio' table
                 repository.insertAudio(
                     AudioEntity(
                         noteId = noteId,
@@ -301,13 +369,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 )
 
-                // 5. Insert TagEntities into 'tags' table
                 val tagEntities = aiAnalysis.tags.map { TagEntity(noteId = noteId, tag = it) }
                 if (tagEntities.isNotEmpty()) {
                     repository.insertTags(tagEntities)
                 }
 
-                // 6. Insert TaskEntities into 'tasks' table
                 val taskEntities = aiAnalysis.tasks.map {
                     TaskEntity(
                         noteId = noteId,
@@ -321,7 +387,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 _aiProcessingStatus.value = "Generating semantic embeddings..."
-                // 7. Generate & Store Embedding in 'embeddings' table
                 val embVector = GeminiAiService.generateEmbedding("$finalTitle $transcript ${aiAnalysis.summary}")
                 repository.insertEmbedding(
                     EmbeddingEntity(
@@ -331,51 +396,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 )
 
-                // 8. Detect Duplicates and Related Notes via Vector Cosine Similarity
-                val relatedCandidates = repository.semanticSearch(embVector, topK = 5)
-                for ((otherNote, sim) in relatedCandidates) {
-                    if (otherNote.id != noteId) {
-                        val simScore = String.format(Locale.US, "%.2f", sim)
-                        if (sim >= 0.85f) {
-                            // High similarity: Mark as duplicate
-                            repository.updateDuplicateStatus(noteId, otherNote.id)
-                            repository.insertRelationship(
-                                NoteRelationshipEntity(
-                                    sourceNoteId = noteId,
-                                    targetNoteId = otherNote.id,
-                                    relationshipType = "DUPLICATE",
-                                    confidence = sim,
-                                    explanation = "Detected duplicate via semantic similarity ($simScore)"
-                                )
-                            )
-                        } else if (sim >= 0.65f) {
-                            // Medium-high similarity: Mark as related
-                            repository.insertRelationship(
-                                NoteRelationshipEntity(
-                                    sourceNoteId = noteId,
-                                    targetNoteId = otherNote.id,
-                                    relationshipType = "RELATED",
-                                    confidence = sim,
-                                    explanation = "Related note detected via semantic similarity ($simScore)"
-                                )
-                            )
-                        }
-                    }
-                }
-
-                // 9. Record Activity Event in 'activity_events' table
                 repository.recordActivityEvent(
                     eventType = "VOICE_TRANSCRIBED",
                     noteId = noteId,
                     description = "Transcribed and classified as ${aiAnalysis.classification}: '$finalTitle'"
                 )
 
-                server.logEvent("Phone", "NEW_VOICE_NOTE", "Processed note #$noteId [${aiAnalysis.classification}]: $finalTitle")
+                server.logEvent("Phone", "NEW_VOICE_NOTE", "Processed note #$noteId: $finalTitle")
                 refreshStats()
             }
             _aiProcessingStatus.value = null
             _isSaving.value = false
-            _currentTab.value = SurfaceTab.NOTES
+            _currentTab.value = SurfaceTab.HOME
         }
     }
 
@@ -407,13 +439,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
             val noteId = repository.insertNote(note)
 
-            // Insert Tags
             val tagEntities = aiAnalysis.tags.map { TagEntity(noteId = noteId, tag = it) }
             if (tagEntities.isNotEmpty()) {
                 repository.insertTags(tagEntities)
             }
 
-            // Insert Tasks
             val taskEntities = aiAnalysis.tasks.map {
                 TaskEntity(
                     noteId = noteId,
@@ -436,40 +466,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
 
-            // Detect duplicates & related notes
-            val relatedCandidates = repository.semanticSearch(embVector, topK = 5)
-            for ((otherNote, sim) in relatedCandidates) {
-                if (otherNote.id != noteId) {
-                    val simScore = String.format(Locale.US, "%.2f", sim)
-                    if (sim >= 0.85f) {
-                        repository.updateDuplicateStatus(noteId, otherNote.id)
-                        repository.insertRelationship(
-                            NoteRelationshipEntity(
-                                sourceNoteId = noteId,
-                                targetNoteId = otherNote.id,
-                                relationshipType = "DUPLICATE",
-                                confidence = sim,
-                                explanation = "Detected duplicate via semantic similarity ($simScore)"
-                            )
-                        )
-                    } else if (sim >= 0.65f) {
-                        repository.insertRelationship(
-                            NoteRelationshipEntity(
-                                sourceNoteId = noteId,
-                                targetNoteId = otherNote.id,
-                                relationshipType = "RELATED",
-                                confidence = sim,
-                                explanation = "Related note detected via semantic similarity ($simScore)"
-                            )
-                        )
-                    }
-                }
-            }
-
             repository.recordActivityEvent(
                 eventType = "NOTE_CREATED",
                 noteId = noteId,
-                description = "Created text note #$noteId [${aiAnalysis.classification}]: $finalTitle"
+                description = "Created text note #$noteId: $finalTitle"
             )
 
             server.logEvent("Phone", "NEW_TEXT_NOTE", "Created: $finalTitle (#$noteId)")
@@ -477,7 +477,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             _aiProcessingStatus.value = null
             _isSaving.value = false
-            _currentTab.value = SurfaceTab.NOTES
+            _currentTab.value = SurfaceTab.HOME
+        }
+    }
+
+    fun markNoteProcessed(noteId: Long) {
+        viewModelScope.launch {
+            repository.updateAgentStatus(noteId, "PROCESSED", "Claude Code", "Task executed and resolved successfully.")
+            repository.recordActivityEvent("NOTE_PROCESSED", noteId, "Marked note #$noteId as PROCESSED")
+            refreshStats()
         }
     }
 
@@ -502,6 +510,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             repository.recordActivityEvent("NOTE_DELETED", id, "Deleted note #$id")
             server.logEvent("Phone", "DELETE_NOTE", "Deleted note #$id")
             refreshStats()
+            if (_selectedNoteId.value == id) {
+                _selectedNoteId.value = null
+                _currentTab.value = SurfaceTab.HOME
+            }
         }
     }
 

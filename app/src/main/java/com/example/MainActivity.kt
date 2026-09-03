@@ -9,43 +9,57 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Checklist
-import androidx.compose.material.icons.filled.Hub
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Leaderboard
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.MainViewModel
 import com.example.ui.SurfaceTab
 import com.example.ui.screens.AgentBridgeScreen
 import com.example.ui.screens.CaptureScreen
 import com.example.ui.screens.DatabaseInspectorScreen
+import com.example.ui.screens.NoteDetailScreen
 import com.example.ui.screens.NotesListScreen
-import com.example.ui.screens.TasksScreen
-import androidx.compose.ui.text.font.FontWeight
+import com.example.ui.theme.EmeraldDark
+import com.example.ui.theme.EmeraldPrimary
+import com.example.ui.theme.MockupBackground
+import com.example.ui.theme.MockupCardBorder
+import com.example.ui.theme.MockupSurface
 import com.example.ui.theme.MyApplicationTheme
-import com.example.ui.theme.PolishBackground
-import com.example.ui.theme.PolishPurplePill
-import com.example.ui.theme.PolishSurfaceVariant
-import com.example.ui.theme.PolishTextPrimary
-import com.example.ui.theme.PolishTextSecondary
+import com.example.ui.theme.TextMutedGrey
+import com.example.ui.theme.TextPrimaryDark
 
 class MainActivity : ComponentActivity() {
 
@@ -66,6 +80,8 @@ class MainActivity : ComponentActivity() {
 fun AgentNotesApp(viewModel: MainViewModel) {
     val currentTab by viewModel.currentTab.collectAsStateWithLifecycle()
     val notes by viewModel.filteredNotes.collectAsStateWithLifecycle()
+    val allNotes by viewModel.repository.allNotes.collectAsStateWithLifecycle(emptyList())
+    val selectedNote by viewModel.selectedNote.collectAsStateWithLifecycle()
     val allTasks by viewModel.allTasks.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val typeFilter by viewModel.typeFilter.collectAsStateWithLifecycle()
@@ -94,115 +110,17 @@ fun AgentNotesApp(viewModel: MainViewModel) {
     val serverPort by viewModel.server.port.collectAsStateWithLifecycle()
     val recentLogs by viewModel.server.recentLogs.collectAsStateWithLifecycle()
 
+    val showBottomBar = currentTab != SurfaceTab.RECORD && currentTab != SurfaceTab.NOTE_DETAIL
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = PolishBackground,
+        containerColor = MockupBackground,
         bottomBar = {
-            NavigationBar(
-                containerColor = PolishSurfaceVariant,
-                tonalElevation = 4.dp,
-                modifier = Modifier
-                    .navigationBarsPadding()
-                    .testTag("main_navigation_bar")
-            ) {
-                NavigationBarItem(
-                    selected = currentTab == SurfaceTab.NOTES,
-                    onClick = { viewModel.setTab(SurfaceTab.NOTES) },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.List,
-                            contentDescription = "Notes"
-                        )
-                    },
-                    label = { Text("Stream", fontWeight = FontWeight.SemiBold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = PolishTextPrimary,
-                        selectedTextColor = PolishTextPrimary,
-                        indicatorColor = PolishPurplePill,
-                        unselectedIconColor = PolishTextSecondary,
-                        unselectedTextColor = PolishTextSecondary
-                    ),
-                    modifier = Modifier.testTag("nav_notes_tab")
-                )
-
-                NavigationBarItem(
-                    selected = currentTab == SurfaceTab.RECORD,
-                    onClick = { viewModel.setTab(SurfaceTab.RECORD) },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.Mic,
-                            contentDescription = "Capture"
-                        )
-                    },
-                    label = { Text("Capture", fontWeight = FontWeight.SemiBold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = PolishTextPrimary,
-                        selectedTextColor = PolishTextPrimary,
-                        indicatorColor = PolishPurplePill,
-                        unselectedIconColor = PolishTextSecondary,
-                        unselectedTextColor = PolishTextSecondary
-                    ),
-                    modifier = Modifier.testTag("nav_capture_tab")
-                )
-
-                NavigationBarItem(
-                    selected = currentTab == SurfaceTab.TASKS,
-                    onClick = { viewModel.setTab(SurfaceTab.TASKS) },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.Checklist,
-                            contentDescription = "Tasks"
-                        )
-                    },
-                    label = { Text("Tasks", fontWeight = FontWeight.SemiBold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = PolishTextPrimary,
-                        selectedTextColor = PolishTextPrimary,
-                        indicatorColor = PolishPurplePill,
-                        unselectedIconColor = PolishTextSecondary,
-                        unselectedTextColor = PolishTextSecondary
-                    ),
-                    modifier = Modifier.testTag("nav_tasks_tab")
-                )
-
-                NavigationBarItem(
-                    selected = currentTab == SurfaceTab.AGENT_BRIDGE,
-                    onClick = { viewModel.setTab(SurfaceTab.AGENT_BRIDGE) },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.Hub,
-                            contentDescription = "Bridge & MCP"
-                        )
-                    },
-                    label = { Text("MCP Bridge", fontWeight = FontWeight.SemiBold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = PolishTextPrimary,
-                        selectedTextColor = PolishTextPrimary,
-                        indicatorColor = PolishPurplePill,
-                        unselectedIconColor = PolishTextSecondary,
-                        unselectedTextColor = PolishTextSecondary
-                    ),
-                    modifier = Modifier.testTag("nav_bridge_tab")
-                )
-
-                NavigationBarItem(
-                    selected = currentTab == SurfaceTab.DATABASE_INSPECTOR,
-                    onClick = { viewModel.setTab(SurfaceTab.DATABASE_INSPECTOR) },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.Storage,
-                            contentDescription = "Database"
-                        )
-                    },
-                    label = { Text("Database", fontWeight = FontWeight.SemiBold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = PolishTextPrimary,
-                        selectedTextColor = PolishTextPrimary,
-                        indicatorColor = PolishPurplePill,
-                        unselectedIconColor = PolishTextSecondary,
-                        unselectedTextColor = PolishTextSecondary
-                    ),
-                    modifier = Modifier.testTag("nav_database_tab")
+            if (showBottomBar) {
+                MockupBottomNavigation(
+                    currentTab = currentTab,
+                    onSelectTab = { tab -> viewModel.setTab(tab) },
+                    modifier = Modifier.navigationBarsPadding()
                 )
             }
         }
@@ -215,12 +133,12 @@ fun AgentNotesApp(viewModel: MainViewModel) {
             AnimatedContent(
                 targetState = currentTab,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "surfaceTransition"
+                label = "screenTransition"
             ) { targetSurface ->
                 when (targetSurface) {
-                    SurfaceTab.NOTES -> {
+                    SurfaceTab.HOME, SurfaceTab.NOTES -> {
                         NotesListScreen(
-                            notes = notes,
+                            notes = if (targetSurface == SurfaceTab.HOME) allNotes.take(6) else notes,
                             tasks = allTasks,
                             searchQuery = searchQuery,
                             typeFilter = typeFilter,
@@ -241,10 +159,33 @@ fun AgentNotesApp(viewModel: MainViewModel) {
                             onDeleteNote = viewModel::deleteNote,
                             onToggleTask = viewModel::toggleTaskCompletion,
                             onNavigateToCapture = { viewModel.setTab(SurfaceTab.RECORD) },
-                            onNavigateToAgentBridge = { viewModel.setTab(SurfaceTab.AGENT_BRIDGE) },
-                            onNavigateToTasks = { viewModel.setTab(SurfaceTab.TASKS) },
-                            onNavigateToDatabaseInspector = { viewModel.setTab(SurfaceTab.DATABASE_INSPECTOR) }
+                            onNavigateToAgentBridge = { viewModel.setTab(SurfaceTab.AGENTS) },
+                            onNavigateToTasks = { viewModel.setTab(SurfaceTab.ACTIVITY) },
+                            onNavigateToDatabaseInspector = { viewModel.setTab(SurfaceTab.ACTIVITY) },
+                            onSelectNote = { id -> viewModel.openNoteDetail(id) },
+                            onSaveTextNote = viewModel::saveTextNote
                         )
+                    }
+
+                    SurfaceTab.NOTE_DETAIL -> {
+                        val activeNote = selectedNote ?: allNotes.firstOrNull()
+                        if (activeNote != null) {
+                            NoteDetailScreen(
+                                note = activeNote,
+                                allNotes = allNotes,
+                                isPlaying = isPlaying && playingNoteId == activeNote.id,
+                                currentPositionMs = if (playingNoteId == activeNote.id) currentPositionMs else 0L,
+                                totalDurationMs = if (playingNoteId == activeNote.id) totalDurationMs else activeNote.audioDurationMs,
+                                onPlayAudio = { viewModel.playNoteAudio(activeNote) },
+                                onBack = { viewModel.closeNoteDetail() },
+                                onSelectNote = { id -> viewModel.openNoteDetail(id) },
+                                onMarkProcessed = { id -> viewModel.markNoteProcessed(id) },
+                                onCreateTask = { _ -> viewModel.setTab(SurfaceTab.ACTIVITY) },
+                                onSendToAgent = { _ -> viewModel.setTab(SurfaceTab.AGENTS) }
+                            )
+                        } else {
+                            viewModel.closeNoteDetail()
+                        }
                     }
 
                     SurfaceTab.RECORD -> {
@@ -256,22 +197,16 @@ fun AgentNotesApp(viewModel: MainViewModel) {
                             isSaving = isSaving,
                             onStartRecording = viewModel::startVoiceRecording,
                             onStopRecordingAndSave = viewModel::stopVoiceRecordingAndSave,
-                            onCancelRecording = viewModel::cancelVoiceRecording,
+                            onCancelRecording = {
+                                viewModel.cancelVoiceRecording()
+                                viewModel.setTab(SurfaceTab.HOME)
+                            },
                             onSaveTextNote = viewModel::saveTextNote,
-                            onBack = { viewModel.setTab(SurfaceTab.NOTES) }
+                            onBack = { viewModel.setTab(SurfaceTab.HOME) }
                         )
                     }
 
-                    SurfaceTab.TASKS -> {
-                        TasksScreen(
-                            tasks = allTasks,
-                            notes = notes,
-                            onToggleTask = viewModel::toggleTaskCompletion,
-                            onBack = { viewModel.setTab(SurfaceTab.NOTES) }
-                        )
-                    }
-
-                    SurfaceTab.AGENT_BRIDGE -> {
+                    SurfaceTab.AGENTS -> {
                         AgentBridgeScreen(
                             isServerRunning = isServerRunning,
                             serverUrl = serverUrl,
@@ -279,20 +214,130 @@ fun AgentNotesApp(viewModel: MainViewModel) {
                             recentLogs = recentLogs,
                             onToggleServer = viewModel::toggleServer,
                             onSimulateAgentQuery = viewModel::simulateAgentQuery,
-                            onBack = { viewModel.setTab(SurfaceTab.NOTES) }
+                            onBack = { viewModel.setTab(SurfaceTab.HOME) }
                         )
                     }
 
-                    SurfaceTab.DATABASE_INSPECTOR -> {
+                    SurfaceTab.ACTIVITY -> {
                         DatabaseInspectorScreen(
                             tableStats = tableStats,
                             recentEvents = recentEvents,
                             onRefresh = viewModel::refreshStats,
-                            onBack = { viewModel.setTab(SurfaceTab.NOTES) }
+                            onBack = { viewModel.setTab(SurfaceTab.HOME) }
                         )
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun MockupBottomNavigation(
+    currentTab: SurfaceTab,
+    onSelectTab: (SurfaceTab) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = MockupSurface,
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, MockupCardBorder),
+        shadowElevation = 8.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("main_navigation_bar")
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceAround,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+        ) {
+            // 1. Home
+            BottomNavItem(
+                icon = Icons.Default.Home,
+                label = "Home",
+                isSelected = currentTab == SurfaceTab.HOME,
+                onClick = { onSelectTab(SurfaceTab.HOME) },
+                testTag = "nav_home_tab"
+            )
+
+            // 2. Notes
+            BottomNavItem(
+                icon = Icons.Default.Description,
+                label = "Notes",
+                isSelected = currentTab == SurfaceTab.NOTES,
+                onClick = { onSelectTab(SurfaceTab.NOTES) },
+                testTag = "nav_notes_tab"
+            )
+
+            // 3. Agents
+            BottomNavItem(
+                icon = Icons.Default.SmartToy,
+                label = "Agents",
+                isSelected = currentTab == SurfaceTab.AGENTS,
+                onClick = { onSelectTab(SurfaceTab.AGENTS) },
+                testTag = "nav_agents_tab"
+            )
+
+            // 4. Activity
+            BottomNavItem(
+                icon = Icons.Default.Leaderboard,
+                label = "Activity",
+                isSelected = currentTab == SurfaceTab.ACTIVITY,
+                onClick = { onSelectTab(SurfaceTab.ACTIVITY) },
+                testTag = "nav_activity_tab"
+            )
+        }
+    }
+}
+
+@Composable
+fun BottomNavItem(
+    icon: ImageVector,
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    testTag: String
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 4.dp)
+            .testTag(testTag)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = if (isSelected) EmeraldPrimary else TextMutedGrey,
+            modifier = Modifier.size(24.dp)
+        )
+
+        Spacer(modifier = Modifier.height(3.dp))
+
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            color = if (isSelected) EmeraldDark else TextMutedGrey
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Green Indicator Underline Bar for selected tab (Mockup Image 1)
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .width(18.dp)
+                    .height(2.5.dp)
+                    .clip(RoundedCornerShape(1.dp))
+                    .background(EmeraldPrimary)
+            )
+        } else {
+            Spacer(modifier = Modifier.height(2.5.dp))
         }
     }
 }
