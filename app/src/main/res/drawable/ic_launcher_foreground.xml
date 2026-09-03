@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Mic Body & Capsule -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M54,30 C48.48,30 44,34.48 44,40 L44,54 C44,59.52 48.48,64 54,64 C59.52,64 64,59.52 64,54 L64,40 C64,34.48 59.52,30 54,30 Z" />
+    <!-- Mic Stand Arc -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:pathData="M37,48 C37,61 44.5,69 54,69 C63.5,69 71,61 71,48" />
+    <!-- Stand Base -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:pathData="M54,69 L54,77 M44,77 L64,77" />
+    <!-- Agent Bridge Connection Nodes & Pulse -->
+    <path
+        android:fillColor="#818CF8"
+        android:pathData="M27,42 A4,4 0 1,1 27,42.01 M81,42 A4,4 0 1,1 81,42.01" />
+    <path
+        android:strokeColor="#818CF8"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M27,42 C30,36 34,34 38,36 M81,42 C78,36 74,34 70,36" />
+</vector>

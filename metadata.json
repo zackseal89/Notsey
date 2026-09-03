@@ -1,0 +1,6 @@
+{
+  "name": "Agent Notes",
+  "description": "Zero-friction voice and text notes bridge for mobile and local AI agents with an embedded MCP server and REST API.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
